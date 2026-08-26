@@ -1,0 +1,49 @@
+id: hl7.fhir.ie.core
+canonical: http://hl7ireland.ie/fhir/core
+name: FHIRCoreIreland
+title: "FHIR Core Ireland: National EHDS-Aligned Core Implementation Guide"
+description: >
+  National Core FHIR Implementation Guide for Ireland, aligned with the European
+  Health Data Space (EHDS). Reuses HL7 Europe Core profiles wherever they exist and
+  nationalises only identifiers (IHI, Eircode), terminology bindings, mandatory
+  elements required by Irish law, and local workflows — see the Governance page for
+  the full rule set applied before any profiling decision.
+status: draft
+version: 0.1.0
+fhirVersion: 4.0.1
+copyrightYear: 2026+
+releaseLabel: ci-build
+publisher:
+  name: "PROVISIONAL: no sponsoring body confirmed yet"
+  url: http://hl7ireland.ie
+contact:
+  - name: "FHIR Core Ireland Editorial Group (provisional)"
+    telecom:
+      - system: url
+        value: http://hl7ireland.ie
+license: CC0-1.0
+jurisdiction: urn:iso:std:iso:3166#IE "Ireland"
+
+dependencies:
+  hl7.fhir.eu.base: 2.0.0
+  hl7.fhir.uv.ips: 2.0.1
+
+menu:
+  Home: index.html
+  Background: background.html
+  Governance: governance.html
+  Mapping: mapping.html
+  Identifiers: identifiers.html
+  Artifacts: artifacts.html
+
+pages:
+  index.md:
+    title: Home
+  background.md:
+    title: "Background: EHDS, Xt-EHR, HL7 Europe, MyHealth@EU"
+  governance.md:
+    title: Governance Principles
+  mapping.md:
+    title: Requirements Mapping
+  identifiers.md:
+    title: National Identifiers

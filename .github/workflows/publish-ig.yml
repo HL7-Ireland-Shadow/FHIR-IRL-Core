@@ -1,0 +1,142 @@
+# Builds the IG with the toolchain image in docker/ and deploys the rendered site
+# to GitHub Pages.
+#
+# One-time setup: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+#
+# Pull requests build the IG and upload the QA report as an artifact, but do not deploy.
+
+name: Publish IG
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tx_server:
+        description: 'Terminology server passed as -tx. Leave blank for the default (tx.fhir.org); "n/a" builds without one - much faster, but terminology bindings go unvalidated.'
+        required: false
+        default: 'n/a'
+      refresh_image:
+        description: 'Rebuild the toolchain image ignoring the layer cache, picking up new IG Publisher / SUSHI releases'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-ig-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The Publisher records the branch and commit in the IG's provenance.
+          fetch-depth: 0
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Layer-cached, so a run that doesn't touch docker/ skips the ~6 minute build.
+      # Note this pins the toolchain to whatever the cached layers hold: run the
+      # workflow manually with refresh_image to pull in newer tool releases.
+      - name: Build the publishing toolchain image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker
+          load: true
+          tags: fhir-publishing-tools:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          no-cache: ${{ inputs.refresh_image || false }}
+
+      # FHIR packages and the downloaded IG template. Bump the -v1 suffix to force
+      # a refetch (for example when fhir.base.template#current has moved on).
+      - name: Restore the FHIR package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.fhir
+          key: fhir-cache-v1-${{ hashFiles('sushi-config.yaml', 'ig.ini', 'ie-template/package/package.json') }}
+          restore-keys: fhir-cache-v1-
+
+      # Runs as the runner's uid so output/ comes back owned by the runner. The image
+      # has no passwd entry for that uid, but the JVM falls back to $HOME, which the
+      # image sets to a world-writable /home/fhir - so both SUSHI and the Publisher
+      # still agree on one package cache.
+      #
+      # temp/ can stay in the workspace here: the SQLite corruption that forces it onto
+      # a volume locally is a Windows/macOS bind-mount problem, and this runner is ext4.
+      - name: Build and render the IG
+        env:
+          TX_SERVER: ${{ inputs.tx_server }}
+        run: |
+          mkdir -p "$HOME/.fhir"
+          set -o pipefail
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/ig" \
+            -v "$HOME/.fhir:/home/fhir/.fhir" \
+            -e TX_SERVER \
+            -e JAVA_OPTS="-Xmx6g -Dfile.encoding=UTF-8" \
+            fhir-publishing-tools:ci publish 2>&1 | tee publisher.log
+
+      - name: Summarise the QA report
+        if: always()
+        run: |
+          {
+            echo "## IG QA"
+            echo
+            if line=$(grep -oE 'Errors: [0-9]+, Warnings: [0-9]+, Info: [0-9]+, Broken Links: [0-9]+' publisher.log | tail -1) && [ -n "$line" ]; then
+              echo "\`$line\`"
+              errors=$(echo "$line" | sed -E 's/Errors: ([0-9]+).*/\1/')
+              if [ "$errors" -gt 0 ]; then
+                echo "::warning::IG QA reported $errors error(s) - see the qa-report artifact"
+              fi
+            else
+              echo "No QA line found - the Publisher probably failed before generating it."
+            fi
+            echo
+            echo "Full report: the **qa-report** artifact on this run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the QA report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report
+          path: |
+            output/qa.html
+            publisher.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - uses: actions/configure-pages@v5
+        if: github.event_name != 'pull_request'
+
+      - name: Upload the rendered site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: output
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    # Never cancel a deploy midway, and never run two at once.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,31 @@
+# Generated FHIR resources — derived from input/fsh by SUSHI, never hand-edited.
+fsh-generated/
+
+# IG Publisher build products.
+output/
+output_comparison/
+temp/
+generated_output/
+
+# Caches: the downloaded IG template, the Publisher jar, and any in-project
+# FHIR package cache. All re-fetched on demand.
+template/
+input-cache/
+.fhir/
+.jekyll-cache/
+.jekyll-metadata
+node_modules/
+
+# Editor / OS cruft.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Conformance statements the Publisher extracts from page narrative each run.
+Requirements-fromNarrative.json
+
+# Package index caches the Publisher writes into folder-based template sources.
+.index.db
+.index.json

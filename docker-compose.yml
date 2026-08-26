@@ -1,0 +1,58 @@
+# HL7 FHIR publishing toolchain for this IG.
+#
+#   docker compose build            # once (and after changing docker/Dockerfile)
+#   docker compose run --rm publish # sushi build + IG Publisher -> ./output
+#
+# Volumes, and why each one is where it is:
+#   .:/ig               your IG project. Sources in, ./output back out.
+#   fhir-cache          ~/.fhir - FHIR packages and downloaded IG templates. Persisted
+#                       so only the first run pays the download cost.
+#   ig-temp             the Publisher's scratch dir. Deliberately NOT the bind mount:
+#                       it writes SQLite (temp/pages/package.db) and the Windows/macOS
+#                       filesystem driver corrupts it -> SQLITE_CORRUPT in DBBuilder.
+#   ig-input-cache      terminology cache. Same reasoning, plus it survives runs.
+
+x-tools: &tools
+  build:
+    context: ./docker
+    args:
+      IG_PUBLISHER_VERSION: ${IG_PUBLISHER_VERSION:-latest}
+      VALIDATOR_VERSION: ${VALIDATOR_VERSION:-latest}
+      SUSHI_VERSION: ${SUSHI_VERSION:-latest}
+  image: fhir-publishing-tools:local
+  volumes:
+    - .:/ig
+    - fhir-cache:/home/fhir/.fhir
+    - ig-temp:/ig/temp
+    - ig-input-cache:/ig/input-cache
+  environment:
+    JAVA_OPTS: ${JAVA_OPTS:--Xmx4g -Dfile.encoding=UTF-8}
+    TX_SERVER: ${TX_SERVER:-}
+
+services:
+  # Full build: SUSHI then the IG Publisher. Rendered site lands in ./output.
+  publish:
+    <<: *tools
+    command: publish
+
+  # FSH compile only - the fast inner loop while writing profiles.
+  sushi:
+    <<: *tools
+    command: sushi build .
+
+  # Interactive toolbox: sushi, gofsh, publisher, validate, jekyll, git on PATH.
+  shell:
+    <<: *tools
+    stdin_open: true
+    tty: true
+    command: shell
+
+  # Delete generated output, scratch and caches for this IG.
+  clean:
+    <<: *tools
+    command: clean
+
+volumes:
+  fhir-cache:
+  ig-temp:
+  ig-input-cache:

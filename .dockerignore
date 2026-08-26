@@ -1,0 +1,8 @@
+# Build output and caches - never part of the image build context.
+output/
+temp/
+template/
+fsh-generated/
+input-cache/
+.git/
+node_modules/

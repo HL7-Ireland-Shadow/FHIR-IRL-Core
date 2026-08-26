@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+#
+# Single entrypoint for the FHIR publishing toolchain. Any command that isn't
+# recognised below is executed verbatim, so the image also works as a plain
+# toolbox (`docker run ... image sushi --help`, `... image bash`).
+set -euo pipefail
+
+FHIR_HOME="${FHIR_HOME:-/opt/fhir}"
+IG_DIR="${IG_DIR:-/ig}"
+JAVA_OPTS="${JAVA_OPTS:--Xmx4g -Dfile.encoding=UTF-8}"
+
+usage() {
+  cat <<'USAGE'
+HL7 FHIR publishing toolchain
+
+  publish [publisher args]   sushi build + IG Publisher over $IG_DIR (default)
+  sushi [args]               SUSHI - compile FSH to FHIR resources
+  gofsh [args]               GoFSH - decompile FHIR resources back to FSH
+  publisher [args]           IG Publisher directly (no implicit -ig)
+  validate <file|dir> ...    FHIR Validator (validator_cli.jar)
+  jekyll [args]              Jekyll directly
+  clean                      Delete generated output, scratch and caches
+  versions                   Show the tool versions baked into this image
+  shell                      Interactive bash
+  <anything else>            Run it as-is
+
+Environment:
+  IG_DIR      IG project root inside the container (default /ig)
+  JAVA_OPTS   JVM flags for the jars (default "-Xmx4g -Dfile.encoding=UTF-8")
+  TX_SERVER   Terminology server; passed as -tx. Use "n/a" to publish offline
+  SKIP_SUSHI  Set to 1 to have `publish` skip the SUSHI step
+
+Examples:
+  docker run --rm -v "$PWD:/ig" -v fhir-cache:/home/fhir/.fhir IMAGE
+  docker run --rm -v "$PWD:/ig" IMAGE sushi build .
+  docker run --rm -v "$PWD:/ig" IMAGE validate fsh-generated/resources/Patient-ie.json
+USAGE
+}
+
+java_jar() {
+  local jar="$1"; shift
+  # shellcheck disable=SC2086 # JAVA_OPTS is intentionally word-split
+  exec java ${JAVA_OPTS} -jar "${jar}" "$@"
+}
+
+tx_args=()
+if [[ -n "${TX_SERVER:-}" ]]; then
+  tx_args=(-tx "${TX_SERVER}")
+fi
+
+cmd="${1:-publish}"
+[[ $# -gt 0 ]] && shift
+
+case "${cmd}" in
+  publish|all)
+    cd "${IG_DIR}"
+    if [[ ! -f sushi-config.yaml && ! -f ig.ini ]]; then
+      echo "fhir-tools: no sushi-config.yaml or ig.ini in ${IG_DIR}." >&2
+      echo "            Mount your IG project there, e.g. -v \"\$PWD:/ig\"." >&2
+      exit 2
+    fi
+    if [[ "${SKIP_SUSHI:-0}" != "1" && -f sushi-config.yaml ]]; then
+      echo "==> sushi build ${IG_DIR}"
+      sushi build .
+    fi
+    echo "==> IG Publisher"
+    java_jar "${FHIR_HOME}/publisher.jar" -ig . "${tx_args[@]}" "$@"
+    ;;
+  publisher|ig|ig-publisher)
+    java_jar "${FHIR_HOME}/publisher.jar" "${tx_args[@]}" "$@"
+    ;;
+  validate|validator)
+    java_jar "${FHIR_HOME}/validator_cli.jar" "$@"
+    ;;
+  clean)
+    cd "${IG_DIR}"
+    failed=0
+    for d in output output_comparison temp input-cache fsh-generated template generated_output; do
+      if [[ -e "${d}" ]]; then
+        # temp/ and input-cache/ are volume mount points - empty them, don't unlink them.
+        # Never swallow the error: a leftover root-owned dir from an older image is
+        # exactly what this needs to report rather than hide.
+        if find "${d}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +; then
+          rmdir "${d}" 2>/dev/null || true
+          echo "cleaned ${d}"
+        else
+          echo "fhir-tools: could not fully clean ${d} - see docker/README.md" >&2
+          failed=1
+        fi
+      fi
+    done
+    exit "${failed}"
+    ;;
+  versions|version|--version|-v)
+    cat "${FHIR_HOME}/VERSIONS.txt"
+    ;;
+  shell)
+    exec bash "$@"
+    ;;
+  help|--help|-h)
+    usage
+    ;;
+  *)
+    exec "${cmd}" "$@"
+    ;;
+esac

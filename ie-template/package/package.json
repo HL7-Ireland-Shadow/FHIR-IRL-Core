@@ -1,0 +1,12 @@
+{
+  "name": "ie.core.template",
+  "version": "0.1.0",
+  "type": "fhir.template",
+  "license": "CC0-1.0",
+  "description": "FHIR Core Ireland IG template - placeholder green/white branding over fhir.base.template. PROVISIONAL: name and canonical change if/when a sponsoring body is confirmed.",
+  "canonical": "http://hl7ireland.ie/fhir/templates/ie.core.template",
+  "base": "fhir.base.template",
+  "dependencies": {
+    "fhir.base.template": "current"
+  }
+}

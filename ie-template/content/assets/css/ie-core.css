@@ -1,0 +1,94 @@
+/* FHIR Core Ireland - placeholder national branding.
+ *
+ * Loaded after the base template's project.css (fragment-css is the last
+ * stylesheet in <head>), so redefining :root here overrides the base palette.
+ *
+ * PLACEHOLDER COLOURS - green/white only, pending real national branding.
+ * Contrast checked against white text: #0F7A4D = 5.4:1 (WCAG AA),
+ * #169B62 = 3.5:1 (accents and large/bold text only, never body copy).
+ */
+
+:root {
+  /* National palette */
+  --ie-green: #169B62;
+  --ie-green-dark: #0F7A4D;
+  --ie-green-darker: #0B5C3A;
+  --ie-green-tint: #E8F5EE;
+  --ie-green-tint-light: #F1FAF5;
+
+  /* 1-5: header, navbar, stripe, footer surfaces */
+  --ig-status-text-color: var(--ie-green-darker);
+  --navbar-bg-color: var(--ie-green-dark);
+  --footer-bg-color: var(--ie-green-tint);
+  --footer-container-bg-color: var(--ie-green-dark);
+  --stripe-bg-color: var(--ie-green);
+
+  /* 6-12: menu buttons */
+  --btn-hover-color: var(--ie-green);
+  --btn-active-color: var(--ie-green-darker);
+  --btn-text-color: #ffffff;
+  --btn-gradient-start-color: #169b62;
+  --btn-gradient-end-color: #0f7a4d;
+  --btn-gradient-start-color-alpha: #ff169b62;
+  --btn-gradient-end-color-alpha: #ff0f7a4d;
+
+  /* 13-14: hyperlinks */
+  --link-color: var(--ie-green-dark);
+  --link-hover-color: var(--ie-green-darker);
+
+  /* 17-20: boxes and notes */
+  --toc-box-bg-color: var(--ie-green-tint);
+  --toc-box-border: 1px solid var(--ie-green);
+  --stu-note-background-color: var(--ie-green-tint-light);
+  --stu-note-border-left-color: var(--ie-green);
+
+  /* 21-22: white header on light-grey sides */
+  --ig-header-color: #f5f5f5;
+  --ig-header-container-color: #ffffff;
+  --footer-nav-bg-color: var(--ie-green-tint);
+
+  /* 24-26: footer text on the dark green container */
+  --footer-text-color: #ffffff;
+  --footer-hyperlink-text-color: #BFE8D4;
+  --footer-highlight-text-color: #E8F5EE;
+
+  /* 27-28: breadcrumbs */
+  --breadcrumb-bg-color: var(--ie-green-tint-light);
+  --breadcrumb-text-color: #555555;
+}
+
+/* Text wordmark, in place of a logo image. Sits in #project-nav, which the
+   base template already floats left at 50px line-height. */
+#project-logo,
+#project-logo:hover,
+#project-logo:focus {
+  text-decoration: none;
+}
+
+.ie-wordmark {
+  display: inline-block;
+  padding: 3px 12px;
+  border-left: 6px solid var(--ie-green);
+  background-color: #ffffff;
+  line-height: 1.25;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--ie-green-darker);
+  white-space: nowrap;
+}
+
+.ie-wordmark strong {
+  font-weight: 700;
+  color: var(--ie-green);
+}
+
+.ie-wordmark .ie-wordmark-sub {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b6b6b;
+}
