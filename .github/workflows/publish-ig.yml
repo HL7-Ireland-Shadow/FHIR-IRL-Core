@@ -41,6 +41,13 @@ jobs:
           # The Publisher records the branch and commit in the IG's provenance.
           fetch-depth: 0
 
+      # Runs before the IG build so a broken gate fails in seconds rather than
+      # after the ~20 minute render. No dependencies: the tests use node:test
+      # and the runtime globals the Worker itself relies on.
+      - name: Test the Basic-auth gate
+        working-directory: worker
+        run: node --test
+
       - uses: docker/setup-buildx-action@v3
 
       # Layer-cached, so a run that doesn't touch docker/ skips the ~6 minute build.
@@ -116,6 +123,15 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      # Catches config, bundle and asset-discovery problems on pull requests,
+      # where the deploy below never runs. Needs no secrets, so it also works on
+      # forks. `wrangler@4` is pinned to match the action's wranglerVersion
+      # below - keep the two in step, or this validates a different Wrangler
+      # from the one that deploys.
+      - name: Validate the Worker and deploy config
+        working-directory: worker
+        run: npx --yes wrangler@4 deploy --dry-run
+
       # Uploads the Worker in worker/ together with output/ as its static
       # assets. worker/wrangler.jsonc sets run_worker_first, so the Basic-auth
       # gate runs before any file is served and cannot be bypassed.
@@ -128,6 +144,11 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
+          # Required. The action installs its own Wrangler, and its default is
+          # 3.90.0 - one patch below the 3.91.0 that first read wrangler.jsonc.
+          # On 3.90.0 the config is ignored entirely and the deploy fails with
+          # "Missing entry-point". Do not remove without moving to wrangler.toml.
+          wranglerVersion: "4"
           command: deploy
 
       - name: Link the deployment

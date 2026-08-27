@@ -56,6 +56,12 @@ Push to `master`, or run the workflow manually (Actions -> Publish IG -> Run
 workflow). The job summary links the deployment. There is no project to create
 first: `wrangler deploy` creates the Worker on its first run.
 
+The workflow pins `wranglerVersion: "4"` on `cloudflare/wrangler-action@v3`, and
+must keep doing so. The action installs its own Wrangler and defaults to 3.90.0,
+which predates the 3.91.0 that first read `wrangler.jsonc`; on that version the
+config is ignored and the deploy fails with `Missing entry-point`. Any Wrangler
+below 3.91.0 needs `wrangler.toml` instead.
+
 Cloudflare creates the DNS record and certificate itself, and the gate applies
 there too. The zone must already be on Cloudflare. Note `custom_domain` takes a
 bare hostname - no `/*`.
