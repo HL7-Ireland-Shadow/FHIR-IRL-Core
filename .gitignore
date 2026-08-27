@@ -29,3 +29,9 @@ Requirements-fromNarrative.json
 # Package index caches the Publisher writes into folder-based template sources.
 .index.db
 .index.json
+
+# Worker secrets for `wrangler dev`, and wrangler's local state. The deployed
+# secrets live in Cloudflare, never in the repo.
+.dev.vars
+.dev.vars.*
+.wrangler/

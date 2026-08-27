@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "irl-core-ig",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+
+  // Serves the gate on <name>.<your-subdomain>.workers.dev. Swap for `routes`
+  // below if you put it on a custom domain instead.
+  "workers_dev": true,
+
+  "observability": { "enabled": true },
+
+  // Non-secret configuration. BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD are
+  // deliberately absent: they are secrets, set with `wrangler secret put`, and
+  // must never be committed here.
+  "vars": {
+    "ORIGIN": "https://IRL-core.fhir.build",
+    "REALM": "FHIR Core Ireland (draft IG)"
+  }
+
+  // "routes": [{ "pattern": "ig.hl7ireland.ie/*", "zone_name": "hl7ireland.ie" }]
+}

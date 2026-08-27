@@ -61,29 +61,6 @@ Useful arguments: `TX_SERVER=n/a` skips terminology validation for a much faster
 
 **[`docker/README.md`](docker/README.md) has the full guide**
 
-### Continuous publication (GitHub Actions -> GitHub Pages)
-
-[`.github/workflows/publish-ig.yml`](.github/workflows/publish-ig.yml) runs the same
-container in CI and deploys the rendered site to GitHub Pages on every push to `main`.
-Pull requests build the IG and attach the QA report as an artifact, but do not deploy.
-
-Run it manually (Actions -> Publish IG -> Run workflow) for two options:
-
-- **Terminology server** - blank uses `tx.fhir.org`; `n/a` builds without one, which is
-  much faster but leaves terminology bindings unvalidated.
-- **Refresh image** - rebuilds the toolchain ignoring the layer cache, picking up new IG
-  Publisher or SUSHI releases. Without it, CI reuses cached layers and so stays on the
-  tool versions it last built.
-
-Every run publishes the QA summary (errors, warnings, broken links) to the job summary
-and uploads `output/qa.html` as the **qa-report** artifact. QA errors annotate the run
-but do not block the deploy - a draft IG with known gaps is still worth publishing.
-
-Note that the publication URL is not the IG's canonical URL (`http://hl7ireland.ie/fhir/core`).
-Rendering and internal links are unaffected, but the Publisher will keep reporting that
-it cannot fetch a publication request or `package-list.json` from the canonical host
-until that host actually exists. 
-
 ### Without Docker
 
 ```
@@ -106,3 +83,39 @@ installed (for example, if an EU Core profile has since changed a cardinality th
 assumed), SUSHI will report a specific, file-and-line error. This is expected first-build
 friction for any IG that derives from external packages, and should be resolved by
 adjusting the specific rule against the real installed profile.
+
+### Continuous publication (GitHub Actions -> GitHub Pages)
+
+[`.github/workflows/publish-ig.yml`](.github/workflows/publish-ig.yml) runs the same
+container in CI and deploys the rendered site to GitHub Pages on every push to `main`.
+Pull requests build the IG and attach the QA report as an artifact, but do not deploy.
+
+Run it manually (Actions -> Publish IG -> Run workflow) for two options:
+
+- **Terminology server** - blank uses `tx.fhir.org`; `n/a` builds without one, which is
+  much faster but leaves terminology bindings unvalidated.
+- **Refresh image** - rebuilds the toolchain ignoring the layer cache, picking up new IG
+  Publisher or SUSHI releases. Without it, CI reuses cached layers and so stays on the
+  tool versions it last built.
+
+Every run publishes the QA summary (errors, warnings, broken links) to the job summary
+and uploads `output/qa.html` as the **qa-report** artifact. QA errors annotate the run
+but do not block the deploy - a draft IG with known gaps is still worth publishing.
+
+### Restricting access to the published site
+
+The IG is a draft without any official sponsorship or status, so access to the published
+artefacts is deliberately limited to avoid them being taken as an endorsed position or formal
+requirements.n GitHub Pages has no access control of its own and si is unable to enforce this.
+[`worker/`](worker/) holds a Cloudflare Worker that puts HTTP Basic
+authentication in front of it: it checks a username and password taken from its
+environment, then reverse-proxies to the Pages site, so unauthenticated
+requests never reach the origin. Publication is unchanged - the Worker only
+controls who can read what the workflow deploys.
+
+Setup, deployment, and behaviour notes are in [`worker/README.md`](worker/README.md).
+
+Note that the publication URL is not the IG's canonical URL (`http://hl7ireland.ie/fhir/core`).
+Rendering and internal links are unaffected, but the Publisher will keep reporting that
+it cannot fetch a publication request or `package-list.json` from the canonical host
+until that host actually exists.
