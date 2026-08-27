@@ -114,13 +114,14 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
+      - uses: actions/configure-pages@v5
+        if: github.event_name != 'pull_request'
+
+      - name: Upload the rendered site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: 'irl-core-ig.aled-adc.workers.dev'
-          directory: 'output'
+          path: output
 
   deploy:
     if: github.event_name != 'pull_request'
