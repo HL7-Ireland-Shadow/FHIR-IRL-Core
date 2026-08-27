@@ -36,5 +36,5 @@
 
   "observability": { "enabled": true },
 
-  "routes": [{ "pattern": "irl-core.fhir.dev", "custom_domain": true }]
+  "routes": [{ "pattern": "irl-core.fhir.build", "custom_domain": true }]
 }
