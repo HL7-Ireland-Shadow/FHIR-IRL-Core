@@ -4,19 +4,37 @@
   "main": "src/index.js",
   "compatibility_date": "2026-08-01",
 
-  // Serves the gate on <name>.<your-subdomain>.workers.dev. Swap for `routes`
-  // below if you put it on a custom domain instead.
-  "workers_dev": true,
+  "assets": {
+    // The IG Publisher's rendered output, gitignored and rebuilt by CI.
+    "directory": "../output",
+
+    // Exposes env.ASSETS to the gate, so it can serve files once a request
+    // has authenticated.
+    "binding": "ASSETS",
+
+    // Without this, Cloudflare serves any matching static file BEFORE invoking
+    // the Worker, and the gate would never see a request for a real page.
+    // This single line is what makes the authentication enforceable.
+    "run_worker_first": true
+
+    // Defaults left alone deliberately:
+    //   html_handling: "auto-trailing-slash" - every file in output/ has an
+    //     extension, so no rewriting is needed.
+    //   not_found_handling: "none" - the Publisher emits no 404.html, so a
+    //     missing path should just 404 rather than serve a substitute page.
+  },
+
+  // Non-secret configuration. The credentials are deliberately absent: they are
+  // secrets, set with `wrangler secret put`, and must never be committed here.
+  "vars": {
+    // Labels the browser's credential prompt.
+    "REALM": "IRL Core FHIR IG"
+  },
+
+  // Served from the custom domain below rather than a workers.dev subdomain.
+  "workers_dev": false,
 
   "observability": { "enabled": true },
 
-  // Non-secret configuration. BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD are
-  // deliberately absent: they are secrets, set with `wrangler secret put`, and
-  // must never be committed here.
-  "vars": {
-    "ORIGIN": "https://IRL-core.fhir.build",
-    "REALM": "FHIR Core Ireland (draft IG)"
-  }
-
-  // "routes": [{ "pattern": "ig.hl7ireland.ie/*", "zone_name": "hl7ireland.ie" }]
+  "routes": [{ "pattern": "irl-core.fhir.dev", "custom_domain": true }]
 }

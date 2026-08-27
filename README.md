@@ -84,11 +84,12 @@ assumed), SUSHI will report a specific, file-and-line error. This is expected fi
 friction for any IG that derives from external packages, and should be resolved by
 adjusting the specific rule against the real installed profile.
 
-### Continuous publication (GitHub Actions -> GitHub Pages)
+### Continuous publication (GitHub Actions -> Cloudflare Workers)
 
 [`.github/workflows/publish-ig.yml`](.github/workflows/publish-ig.yml) runs the same
-container in CI and deploys the rendered site to GitHub Pages on every push to `main`.
-Pull requests build the IG and attach the QA report as an artifact, but do not deploy.
+container in CI and deploys the rendered site to Cloudflare Workers as static assets
+on every push to `master`. Pull requests build the IG and attach the QA report as an
+artifact, but do not deploy.
 
 Run it manually (Actions -> Publish IG -> Run workflow) for two options:
 
@@ -106,14 +107,16 @@ but do not block the deploy - a draft IG with known gaps is still worth publishi
 
 The IG is a draft without any official sponsorship or status, so access to the published
 artefacts is deliberately limited to avoid them being taken as an endorsed position or formal
-requirements.n GitHub Pages has no access control of its own and si is unable to enforce this.
-[`worker/`](worker/) holds a Cloudflare Worker that puts HTTP Basic
-authentication in front of it: it checks a username and password taken from its
-environment, then reverse-proxies to the Pages site, so unauthenticated
-requests never reach the origin. Publication is unchanged - the Worker only
-controls who can read what the workflow deploys.
+requirements.
 
-Setup, deployment, and behaviour notes are in [`worker/README.md`](worker/README.md).
+The deployment therefore sits behind HTTP Basic authentication.
+[`worker/src/index.js`](worker/src/index.js) is deployed as a Worker with `output/`
+attached as its static assets, configured to run before any file is served: it checks a
+username and password taken from the environment, then serves the requested file from
+the `ASSETS` binding. Nothing reaches the site without credentials.
+
+**All Cloudflare setup - the credential secrets and the API token the workflow needs -
+is in [`worker/README.md`](worker/README.md).**
 
 Note that the publication URL is not the IG's canonical URL (`http://hl7ireland.ie/fhir/core`).
 Rendering and internal links are unaffected, but the Publisher will keep reporting that

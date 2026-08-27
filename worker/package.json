@@ -1,14 +1,15 @@
 {
-  "name": "irl-core-ig-worker",
+  "name": "irl-core-ig-gate",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Basic-auth gate in front of the published FHIR Core Ireland IG",
+  "description": "Basic-auth gate for the FHIR Core Ireland IG on Cloudflare Workers",
   "scripts": {
+    "test": "node --test",
+    "check": "wrangler deploy --dry-run",
+    "secrets": "wrangler secret put BASIC_AUTH_USERNAME && wrangler secret put BASIC_AUTH_PASSWORD",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "tail": "wrangler tail",
-    "test": "node --test test/"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

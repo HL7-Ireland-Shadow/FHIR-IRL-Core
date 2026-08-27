@@ -1,40 +1,43 @@
 /**
- * Basic-auth gate in front of the IG published on GitHub Pages.
+ * Basic-auth gate for the IG on Cloudflare Workers with static assets.
  *
- * Credentials come from the environment - BASIC_AUTH_USERNAME and
- * BASIC_AUTH_PASSWORD, set as Worker secrets - and the site behind the gate is
- * whatever ORIGIN points at. See ../README.md for setup.
+ * The rendered site is bound as ASSETS (see wrangler.jsonc, which points at
+ * ../output). `run_worker_first: true` is what makes this a gate rather than
+ * decoration: without it Cloudflare serves a matching static file *before*
+ * invoking this script, and every page would bypass the check.
+ *
+ * Credentials come from the environment: BASIC_AUTH_USERNAME and
+ * BASIC_AUTH_PASSWORD, set with `wrangler secret put`. See ../README.md.
+ *
+ * Kept dependency-free so it needs no bundling. The helpers are exported for
+ * the tests.
  */
-
-import { credentialsMatch, parseBasicCredentials } from './auth.js';
 
 const DEFAULT_REALM = 'Restricted';
 
 /** All a rendered, read-only IG needs. Anything else is refused at the edge. */
 const ALLOWED_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-/** Statuses whose responses must not carry a body. */
-const BODILESS_STATUSES = new Set([101, 204, 205, 304]);
+const encoder = new TextEncoder();
 
 export default {
   /**
    * @param {Request} request
-   * @param {Record<string, string | undefined>} env
+   * @param {{ ASSETS: { fetch: (request: Request) => Promise<Response> } } & Record<string, string | undefined>} env
    */
   async fetch(request, env) {
     const expected = readExpectedCredentials(env);
 
-    // Fail closed. A deployment missing its secrets must never serve the
-    // origin, and must not hand out a challenge it could never satisfy.
+    // Fail closed. A deployment missing its secrets must never serve the site,
+    // and must not hand out a challenge it could never satisfy.
     if (!expected) {
       console.error('BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD must both be set');
       return problem(500, 'Authentication is not configured on this deployment.');
     }
 
-    const origin = parseOrigin(env.ORIGIN);
-    if (!origin) {
-      console.error(`ORIGIN is missing or not an absolute URL: ${env.ORIGIN}`);
-      return problem(500, 'Origin is not configured on this deployment.');
+    if (!env.ASSETS || typeof env.ASSETS.fetch !== 'function') {
+      console.error('The ASSETS binding is missing - check the assets block in wrangler.jsonc');
+      return problem(500, 'Static assets are not available on this deployment.');
     }
 
     const supplied = parseBasicCredentials(request.headers.get('authorization'));
@@ -42,11 +45,13 @@ export default {
       return challenge(env);
     }
 
+    // Checked after authenticating, so an anonymous caller learns nothing about
+    // what the deployment does or does not support.
     if (!ALLOWED_METHODS.has(request.method)) {
       return problem(405, 'Method not allowed.', { allow: 'GET, HEAD, OPTIONS' });
     }
 
-    return proxy(request, origin);
+    return env.ASSETS.fetch(request);
   },
 };
 
@@ -66,22 +71,13 @@ function readExpectedCredentials(env) {
   return { username, password };
 }
 
-/** @returns {URL | null} */
-function parseOrigin(value) {
-  if (typeof value !== 'string' || value === '') return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url : null;
-  } catch {
-    return null;
-  }
-}
-
 /** 401 with the challenge that makes the browser show its credential prompt. */
 function challenge(env) {
-  // A realm is an RFC 7230 quoted-string: neither quotes nor backslashes can
+  // A realm is an RFC 7230 quoted-string: neither quotes nor backslashes may
   // appear raw, so drop them rather than emit a malformed header.
-  const realm = String(env.REALM || DEFAULT_REALM).replace(/["\\]/g, '');
+  const realm = [...String(env.REALM || DEFAULT_REALM)]
+    .filter((character) => character !== '"' && character !== String.fromCharCode(92))
+    .join('');
 
   return new Response('Authentication required.\n', {
     status: 401,
@@ -105,69 +101,85 @@ function problem(status, message, extraHeaders = {}) {
 }
 
 /**
- * Forward an authenticated request to the origin.
+ * Decode an `Authorization: Basic ...` header value (RFC 7617).
  *
- * @param {Request} request
- * @param {URL} origin ORIGIN, possibly including a path prefix
+ * Returns null for anything absent or malformed; callers must treat null
+ * exactly as they treat a credential mismatch.
+ *
+ * @param {string | null} header
+ * @returns {{ username: string, password: string } | null}
  */
-async function proxy(request, origin) {
-  const incoming = new URL(request.url);
-  const basePath = trimTrailingSlash(origin.pathname);
-  const target = new URL(basePath + incoming.pathname + incoming.search, origin.origin);
+export function parseBasicCredentials(header) {
+  if (typeof header !== 'string') return null;
 
-  const headers = new Headers(request.headers);
-  // The gate credentials are ours, not the origin's.
-  headers.delete('authorization');
-  headers.delete('cookie');
+  const separator = header.indexOf(' ');
+  if (separator === -1) return null;
+  if (header.slice(0, separator).toLowerCase() !== 'basic') return null;
 
-  // Methods are restricted to GET/HEAD/OPTIONS above, so there is never a body
-  // to forward.
-  const upstream = new Request(target, {
-    method: request.method,
-    headers,
-    redirect: 'manual',
-  });
+  const encoded = header.slice(separator + 1).trim();
+  if (encoded === '') return null;
 
-  const response = await fetch(upstream);
-  return rewriteRedirect(response, origin, incoming);
+  let decoded;
+  try {
+    // atob yields one character per byte; re-decode those bytes as UTF-8 so
+    // non-ASCII passwords survive (RFC 7617 charset="UTF-8").
+    const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+    decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+
+  // Only the first colon separates the pair: a username cannot contain one,
+  // a password can.
+  const colon = decoded.indexOf(':');
+  if (colon === -1) return null;
+
+  return { username: decoded.slice(0, colon), password: decoded.slice(colon + 1) };
 }
 
 /**
- * Keep the browser on the gated hostname.
+ * Constant-time string equality.
  *
- * GitHub Pages redirects to add trailing slashes, and its Location points at
- * github.io. Left alone, following one would escape the gate.
+ * Both inputs are HMAC'd under a per-call random key first. That fixes the
+ * comparison at 32 bytes whatever the input length (so nothing leaks the
+ * secret's length) and leaves digests uncorrelated between calls.
+ *
+ * @returns {Promise<boolean>}
  */
-function rewriteRedirect(response, origin, incoming) {
-  const location = response.headers.get('location');
-  if (!location) return response;
+export async function secureEqual(a, b) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    crypto.getRandomValues(new Uint8Array(32)),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
 
-  let resolved;
-  try {
-    resolved = new URL(location, origin);
-  } catch {
-    return response;
-  }
+  const [digestA, digestB] = await Promise.all([
+    crypto.subtle.sign('HMAC', key, encoder.encode(a)),
+    crypto.subtle.sign('HMAC', key, encoder.encode(b)),
+  ]);
 
-  // A redirect somewhere else entirely is the origin's business, not ours.
-  if (resolved.origin !== origin.origin) return response;
+  const viewA = new Uint8Array(digestA);
+  const viewB = new Uint8Array(digestB);
 
-  const basePath = trimTrailingSlash(origin.pathname);
-  let path = resolved.pathname;
-  if (basePath !== '' && path.startsWith(basePath)) {
-    path = path.slice(basePath.length) || '/';
-  }
-
-  const headers = new Headers(response.headers);
-  headers.set('location', new URL(path + resolved.search + resolved.hash, incoming.origin).toString());
-
-  return new Response(BODILESS_STATUSES.has(response.status) ? null : response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+  let diff = 0;
+  for (let i = 0; i < viewA.length; i += 1) diff |= viewA[i] ^ viewB[i];
+  return diff === 0;
 }
 
-function trimTrailingSlash(path) {
-  return path === '/' ? '' : path.replace(/\/+$/, '');
+/**
+ * Compare supplied credentials against the configured pair.
+ *
+ * Both halves are always compared - never short-circuited on the username - so
+ * response timing does not reveal which half was wrong.
+ *
+ * @returns {Promise<boolean>}
+ */
+export async function credentialsMatch(supplied, expected) {
+  const [usernameOk, passwordOk] = await Promise.all([
+    secureEqual(supplied.username, expected.username),
+    secureEqual(supplied.password, expected.password),
+  ]);
+  return usernameOk && passwordOk;
 }

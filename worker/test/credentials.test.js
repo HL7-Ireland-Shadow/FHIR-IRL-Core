@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { credentialsMatch, parseBasicCredentials, secureEqual } from '../src/auth.js';
+import { credentialsMatch, parseBasicCredentials, secureEqual } from '../src/index.js';
 
 /** Build an `Authorization: Basic ...` value the way a client would. */
 function basic(username, password) {
