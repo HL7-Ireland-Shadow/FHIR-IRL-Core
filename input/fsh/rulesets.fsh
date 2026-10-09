@@ -6,10 +6,17 @@
 // Invariants
 // ---------------------------------------------------------------------------
 
+
+//TODO: confirm long vs short format for messaging support for long GS1 format
 Invariant: ie-ihi-format
 Description: "IHI value must be 18 numeric digits (a 10-digit core identifier plus a modulus-11 check digit and a trailing
 GS1 check digit), matching the HSE National Register of Individual Health Identifiers format under the Health Identifiers Act 2014."
 Expression: "value.matches('^[0-9]{18}$')"
+Severity: #error
+
+Invariant: hse-ppsn-format
+Description: "A PPSN is 7 digits followed by 1 or 2 upper-case letters, with no spaces or punctuation."
+Expression: "matches('^[0-9]{7}[A-Z]{1,2}$')"
 Severity: #error
 
 Invariant: ie-eircode-format
@@ -18,20 +25,28 @@ Expression: "matches('^[A-Za-z0-9]{7}$')"
 Severity: #error
 
 // ---------------------------------------------------------------------------
-// RuleSet: NationalIHIIdentifier: insert into Patient-derived profiles
+// RuleSet: NationalIdentifier: insert into Patient-derived profiles
 // ---------------------------------------------------------------------------
 
-RuleSet: NationalIHIIdentifier
-* identifier ^slicing.discriminator.type = #pattern
+RuleSet: IENationalIdentifier
+* identifier ^slicing.discriminator.type = #value
 * identifier ^slicing.discriminator.path = "system"
 * identifier ^slicing.rules = #open
-* identifier ^slicing.description = "Slice by identifier.system to isolate the national IHI"
-* identifier contains ihi 0..1 MS
-* identifier[ihi] ^short = "Individual Health Identifier (IHI): Health Identifiers Act 2014"
-* identifier[ihi].system = $IHISystem
-* identifier[ihi].system ^short = "PLACEHOLDER: pending official OID/URI registration by HSE / Department of Health under the Health Identifiers Act 2014. Do not treat as a live identifier system."
-* identifier[ihi].value 1..1 MS
-* identifier[ihi] obeys ie-ihi-format
+* identifier ^slicing.description = "Slice by identifier.system"
+* identifier contains
+    IHI 0..1 MS and
+    PPSN 0..1 MS
+* identifier[IHI] ^short = "Individual Health Identifier (IHI): Health Identifiers Act 2014"
+* identifier[IHI].system = $IHISystem
+* identifier[IHI].system ^short = "PLACEHOLDER: pending official OID/URI registration by HSE / Department of Health under the Health Identifiers Act 2014. Do not treat as a live identifier system."
+* identifier[IHI].value 1..1 MS
+* identifier[IHI] obeys ie-ihi-format
+* identifier[PPSN] ^short = "Personal Public Service Number (PPSN)"
+* identifier[PPSN].system 1..1
+* identifier[PPSN].system = $PPSNSystem (exactly)
+* identifier[PPSN].value 1..1
+* identifier[PPSN].value obeys hse-ppsn-format
+* identifier.type from IEIdentifierTypeVS (extensible)
 
 // ---------------------------------------------------------------------------
 // RuleSet: HSEOrganisationIdentifier: insert into Organization-derived profiles
@@ -61,12 +76,3 @@ RuleSet: ProfessionalRegisterIdentifier
 * identifier[professionalRegisterNumber].system = $ProfessionalRegisterSystem
 * identifier[professionalRegisterNumber].system ^short = "PLACEHOLDER: generic slot covering multiple statutory registers;
 to be split into per-register systems (e.g. distinct Medical Council / NMBI / CORU systems) once confirmed with each regulator"
-
-// ---------------------------------------------------------------------------
-// RuleSet: EircodeOnAddress: insert with an "address" path prefix, e.g.
-//   * address insert EircodeOnAddress
-// ---------------------------------------------------------------------------
-
-RuleSet: EircodeOnAddress
-* extension contains $EircodeExt named eircode 0..1 MS
-* extension[eircode] ^short = "Eircode routing key + unique identifier for this address"
