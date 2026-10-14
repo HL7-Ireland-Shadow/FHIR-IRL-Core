@@ -1,6 +1,6 @@
 # HL7 FHIR publishing toolchain for this IG.
 #
-#   docker compose build            # once (and after changing docker/Dockerfile)
+#   docker compose pull             # fetch the toolchain image (and to pick up a newer one)
 #   docker compose run --rm publish # sushi build + IG Publisher -> ./output
 #
 # Volumes, and why each one is where it is:
@@ -13,13 +13,7 @@
 #   ig-input-cache      terminology cache. Same reasoning, plus it survives runs.
 
 x-tools: &tools
-  build:
-    context: ./docker
-    args:
-      IG_PUBLISHER_VERSION: ${IG_PUBLISHER_VERSION:-latest}
-      VALIDATOR_VERSION: ${VALIDATOR_VERSION:-latest}
-      SUSHI_VERSION: ${SUSHI_VERSION:-latest}
-  image: fhir-publishing-tools:local
+  image: ghcr.io/hl7-ireland-shadow/fhir-irl-publication-tools:latest
   volumes:
     - .:/ig
     - fhir-cache:/home/fhir/.fhir

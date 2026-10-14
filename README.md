@@ -36,12 +36,12 @@ This is a standard SUSHI/FHIR IG Publisher project.
 
 ### With Docker (recommended)
 
-[`docker/`](docker/) builds an image containing the whole HL7 publishing toolchain — IG
-Publisher, FHIR Validator, SUSHI, GoFSH, JDK, Ruby/Jekyll and Graphviz — so nothing has
-to be installed on the host:
+The `ghcr.io/hl7-ireland-shadow/fhir-irl-publication-tools:latest` image contains the whole
+HL7 publishing toolchain — IG Publisher, FHIR Validator, SUSHI, GoFSH, JDK, Ruby/Jekyll and
+Graphviz — so nothing has to be installed on the host:
 
 ```
-docker compose build
+docker compose pull
 docker compose run --rm publish
 ```
 
@@ -56,10 +56,8 @@ docker compose run --rm publish versions      # tool versions baked into the ima
 ```
 
 Useful arguments: `TX_SERVER=n/a` skips terminology validation for a much faster build;
-`JAVA_OPTS=-Xmx8g` raises the heap; `IG_PUBLISHER_VERSION` / `VALIDATOR_VERSION` /
-`SUSHI_VERSION` are build args (`latest` by default) to pin for a reproducible image.
-
-**[`docker/README.md`](docker/README.md) has the full guide**
+`JAVA_OPTS=-Xmx8g` raises the heap. The image is built and versioned in its own
+repository; run `docker compose pull` to pick up a newer one.
 
 ### Without Docker
 
@@ -87,17 +85,14 @@ adjusting the specific rule against the real installed profile.
 ### Continuous publication (GitHub Actions -> Cloudflare Workers)
 
 [`.github/workflows/publish-ig.yml`](.github/workflows/publish-ig.yml) runs the same
-container in CI and deploys the rendered site to Cloudflare Workers as static assets
+image in CI and deploys the rendered site to Cloudflare Workers as static assets
 on every push to `master`. Pull requests build the IG and attach the QA report as an
 artifact, but do not deploy.
 
-Run it manually (Actions -> Publish IG -> Run workflow) for two options:
+Run it manually (Actions -> Publish IG -> Run workflow) for an option:
 
 - **Terminology server** - blank uses `tx.fhir.org`; `n/a` builds without one, which is
   much faster but leaves terminology bindings unvalidated.
-- **Refresh image** - rebuilds the toolchain ignoring the layer cache, picking up new IG
-  Publisher or SUSHI releases. Without it, CI reuses cached layers and so stays on the
-  tool versions it last built.
 
 Every run publishes the QA summary (errors, warnings, broken links) to the job summary
 and uploads `output/qa.html` as the **qa-report** artifact. QA errors annotate the run
